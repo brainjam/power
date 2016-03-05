@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+
+<style>
+circle.interior {
+  fill: steelblue;
+  fill-opacity: .3;
+  stroke: black;
+  stroke-width: 1 ;
+}
+
+circle.interior.dragging, circle.interior:hover {
+  fill: red;
+}
+
+circle.outline {
+  fill:none;
+  stroke: black;
+  stroke-width: 2 ;
+}
+
+circle.outline.dragging, circle.outline:hover {
+  stroke: red;
+}
+
+circle.interior.intersects {
+  fill: yellow ;
+}
+
+path {
+  fill: none;
+  stroke: #000;
+}
+
+path.cell {
+  stroke: blue;
+}
+
+
+</style>
+
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/mathjs/2.2.0/math.js"></script>
+<script type="text/javascript" src="delaunay.js"></script>
+<script type="text/javascript" src="Vector3.js"></script>
+
+<script>
+var margin = {top: -5, right: -5, bottom: -5, left: -5},
+    width = 900 - margin.left - margin.right,
+    height = 900 - margin.top - margin.bottom;
+
+var drag = d3.behavior.drag()
+    .origin(function(d) { return d; })
+    .on("dragstart", dragstarted)
+    .on("drag", dragged)
+    .on("dragend", dragended);
+
+function dragstarted(d) {
+  d3.event.sourceEvent.stopPropagation();
+  d3.select(this).classed("dragging", true);
+}
+
+function dragged(d) {
+  var dragx = d3.event.x ;
+  var dragy = d3.event.y ;
+  var circle = d3.select(this) ;
+  var cx = circle.attr('cx') ;
+  var cy = circle.attr('cy') ;
+  var mouse = d3.mouse(container.node()) ;
+  var mousex = mouse[0] ;
+  var mousey = mouse[1] ;
+  var r = Math.sqrt((mousex-cx)*(mousex-cx)+(mousey-cy)*(mousey-cy)) ;
+  //debugger ;
+  //console.log([cx,cy,dragx,dragy,mouse[0],mouse[1]].join(',')) ;
+	var num = circle.attr('num') ;
+	var selector = ["[num=",num,"]"].join('') ;
+  var circles = d3.selectAll(selector) ;
+  if (d3.event.sourceEvent.shiftKey){
+    circles.attr("r", d.r = r) ;
+  } else {
+    circles
+      .attr("cx", d.x = dragx)
+      .attr("cy", d.y = dragy);  
+  }
+  
+  container.selectAll("circle.interior").classed("intersects", function(d){return d.intersects;}) ;
+    
+  //console.log('shiftKey: '+d3.event.sourceEvent.shiftKey) ;
+  updateTriangles() ;
+}
+
+function dragended(d) {
+  d3.select(this).classed("dragging", false);
+  updateTriangles() ;
+}
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.right + ")");
+
+var rect = svg.append("rect")
+    .attr("width", width)
+    .attr("height", height)
+    .style("fill", "none")
+    .style("pointer-events", "all");
+
+var pathContainer = svg.append("g") ;
+var cellContainer = svg.append("g") ;
+var container = svg.append("g");
+
+var vertices = d3.range(100).map(function(d) {
+					return new Vertex((0.05 + 0.9*Math.random()) * width,
+							              (0.05 + 0.9*Math.random()) * height,
+							              Math.random() * 20 + 5);
+				});
+			
+  var path = pathContainer.selectAll("path") ;
+  var interiors = container.selectAll("circle.interior") ;
+  var outlines = container.selectAll("circle.outline") ;
+  var cells = cellContainer.selectAll("path") ;
+  
+  updateTriangles() ;
+
+  // The problem with the following is that all the outlines
+  // end up hovering over all the interiors.  What we want is for
+  // each outline to above its corresponding interior.  Way
+  // to do that is outlined in 
+  // http://stackoverflow.com/questions/24912274/d3-update-data-with-multiple-elements-in-a-group
+  updateCircles(interiors,'interior', drag) ;
+  updateCircles(outlines,'outline', drag) ;
+  
+  
+function updateTriangles() {
+  //var vertices = dots.map(function(dot){return new Vertex(dot.x, dot.y, dot.r)}) ;
+  var triangles = triangulate(vertices);
+  
+  /*
+  console.log('triangles') ;
+  var delaunayData = triangles.map(function(t){return[[t.v0.x,t.v0.y],[t.v1.x,t.v1.y],[t.v2.x,t.v2.y]]}) ;
+	var pathData = delaunayData.map(function(d) { return "M" + d.join("L") + "Z"; }) ;
+  var pathUpdate = path.data(pathData, String);
+  pathUpdate.exit().remove();
+  pathUpdate.enter().append("path")
+                      .attr("d", String);
+  path = pathUpdate ;
+  */
+  
+  var cellData = vertices.map(function(v){return "M" + v.cell.join("L") + "Z";})
+  cells = cells.data (cellData, String)
+  cells.enter().append("path")
+      .attr("d", String)
+      .attr("class", "cell") ;
+  cells.exit().remove()
+      
+}
+
+// TODO: before dropping the outlying vertices, calculate the power cell of each vertex
+// might make sense to start this in a new file
+
+
+  
+function updateCircles(selection, className, dragFn)
+{
+    var updateSelection = selection.data(vertices) ;
+
+console.log('updateSelection') ;
+		updateSelection.enter().append("circle")
+    	  .classed(className, true)
+        ;
+      
+    updateSelection
+        .attr('num', function(d,i){return 'x'+i})
+        .attr("r", function(d) { return d.r; })
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .classed('intersects', function(d) {
+          console.log('intersects '+d.intersects) ;
+          return d.intersects; })
+        .call(dragFn)
+        ;
+// >>> TO DO: work out the 'intersects' visual. The above 'classed' is not effective        
+        selection = updateSelection ;
+
+
+}
+
+
+	
+</script>
+</body>
