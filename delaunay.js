@@ -323,9 +323,9 @@
 
 // circle/polygon intersection, copied from http://bl.ocks.org/mbostock/4218871    
 function intersects(circle, polygon) {
-    if (polygon.every(function(pt){return pointInCircle(pt,circle)})){
-        return false ;
-    }
+    //if (polygon.every(function(pt){return pointInCircle(pt,circle)})){
+    //    return false ;
+    //}
   return pointInPolygon(circle, polygon)
       || polygonEdges(polygon).some(function(line) { return pointLineSegmentDistance(circle, line) < circle[2]; });
 }
